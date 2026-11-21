@@ -68,7 +68,7 @@ describe('BlockyController against fake blocky', () => {
     fake.state.requests.length = 0;
     await byId('pause-60').set(false);
     assert.equal(fake.state.enabled, false);
-    assert.equal(fake.state.requests.length, 0);
+    assert.deepEqual(fake.state.requests.filter((r) => !r.endsWith('/status')), []);
   });
 
   it('a quick on-then-off of a pause switch ends with blocking on', async () => {
@@ -103,6 +103,27 @@ describe('BlockyController against fake blocky', () => {
     await fetch(`${fake.url}/api/blocking/enable`);
     await controller.refresh();
     assert.deepEqual(states(), { 'blocking': true, 'pause-5': false, 'pause-10': false, 'pause-60': false });
+  });
+
+  it('reports success before the confirming status read finishes', async () => {
+    let releaseStatus;
+    const gate = new Promise((r) => {
+      releaseStatus = r;
+    });
+    const client = {
+      disable: async () => {},
+      status: async () => {
+        await gate;
+        return { enabled: false, autoEnableInSec: 300 };
+      },
+    };
+    const c = new BlockyController(client, quietLog, { pauseMinutes: [5], pollIntervalSeconds: 0 });
+    await c.pause(5); // would hang here if the action waited for the status read
+    assert.equal(c.snapshot.activePauseMinutes, 5);
+    assert.equal(c.snapshot.autoEnableInSec, 300);
+    releaseStatus();
+    await c.refresh();
+    c.stop();
   });
 
   it('emits change events', async () => {

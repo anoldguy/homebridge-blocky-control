@@ -33,6 +33,8 @@ export function isPauseOn(snapshot: BlockySnapshot, minutes: number): boolean {
 interface ActionPlan {
   label: string;
   run: () => Promise<void>;
+  /** blocky's status once the action has worked; shown right away, then confirmed by a status read */
+  expected: BlockingStatus;
 }
 
 export interface BlockyControllerOptions {
@@ -148,6 +150,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
         }
         this.activePauseMinutes = undefined;
       },
+      expected: enabled ? { enabled: true, autoEnableInSec: 0 } : { enabled: false, autoEnableInSec: 0 },
     };
   }
 
@@ -158,6 +161,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
         await this.client.disable(minutes);
         this.activePauseMinutes = minutes;
       },
+      expected: { enabled: false, autoEnableInSec: minutes * 60 },
     };
   }
 
@@ -190,7 +194,14 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
         this.emitIfChanged(true);
         throw error;
       }
-      await this.fetchStatusOrMarkUnreachable();
+      // Show the result now and confirm it with a status read afterwards, instead of
+      // making the caller wait for that read too: HomeKit gives a write about 10s.
+      if (!this.reachable) {
+        this.log.info('Connected to blocky');
+      }
+      this.reachable = true;
+      this.applyStatus(plan.expected);
+      void this.refresh();
     });
   }
 
@@ -208,6 +219,10 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
       this.log.info(`Connected to blocky (blocking ${status.enabled ? 'enabled' : 'disabled'})`);
     }
     this.reachable = true;
+    this.applyStatus(status);
+  }
+
+  private applyStatus(status: BlockingStatus): void {
     this.status = status;
     this.reconcilePause(status);
     this.scheduleAutoEnableCheck(status);
