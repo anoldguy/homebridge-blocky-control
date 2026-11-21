@@ -1,5 +1,6 @@
 import type { API, Logging, MatterAccessory } from 'homebridge';
 
+import { BlockyApiError } from './blockyClient.js';
 import type { BlockyController, BlockySnapshot } from './blockyController.js';
 import { type BlockyControl, isTimer, type PauseStyle } from './controls.js';
 import { type MatterDeviceKind, resolveMatterDeviceType } from './matterDeviceTypes.js';
@@ -144,8 +145,9 @@ export class BlockyMatterAccessories {
       try {
         await action();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new this.api.matter!.status.Failure(`Blocky request failed: ${message}`);
+        // Controllers get a short reason only; the full error (with blocky's address) is already in the Homebridge log.
+        const reason = error instanceof BlockyApiError && error.status !== undefined ? `blocky returned HTTP ${error.status}` : 'could not reach blocky';
+        throw new this.api.matter!.status.Failure(`Blocky request failed: ${reason}`);
       }
     })();
     this.inFlight = run.catch(() => undefined);

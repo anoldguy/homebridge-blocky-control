@@ -8,10 +8,14 @@ export function parseBlockyUrl(raw: string): ParsedUrl {
   try {
     parsed = new URL(raw);
   } catch {
-    return { ok: false, error: `"${raw}" is not a valid URL. Use something like http://192.168.1.2:4000` };
+    return { ok: false, error: 'not a valid URL. Use something like http://192.168.1.2:4000' };
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { ok: false, error: `blocky URL must start with http:// or https:// (got ${parsed.protocol}//)` };
+  }
+  if (parsed.username || parsed.password) {
+    // fetch() refuses URLs with credentials, and its error would print them to the log.
+    return { ok: false, error: 'remove the user name and password from the URL (blocky\'s API has no login)' };
   }
   if (parsed.search || parsed.hash) {
     return { ok: false, error: 'blocky URL must not include a query string or #fragment' };

@@ -283,6 +283,12 @@ describe('config checks', () => {
     assert.equal(parseBlockyUrl('not a url').ok, false);
   });
 
+  it('rejects credentials in the URL without echoing them', () => {
+    const result = parseBlockyUrl('http://admin:hunter2@dns.lan:4000');
+    assert.equal(result.ok, false);
+    assert.ok(!result.error.includes('hunter2'));
+  });
+
   it('reads numbers with fallbacks and limits', () => {
     const warnings = [];
     const warn = (m) => warnings.push(m);
