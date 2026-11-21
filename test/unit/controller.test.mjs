@@ -151,6 +151,24 @@ describe('error handling', () => {
   });
 });
 
+describe('polling', () => {
+  it('does not build up a backlog of status requests while blocky is slow', async () => {
+    let calls = 0;
+    const slowClient = {
+      status: () => {
+        calls += 1;
+        return new Promise((r) => setTimeout(() => r({ enabled: true }), 30));
+      },
+    };
+    const controller = new BlockyController(slowClient, quietLog, { pauseMinutes: [], pollIntervalSeconds: 0 });
+    const first = Array.from({ length: 10 }, () => controller.refresh());
+    await new Promise((r) => setTimeout(r, 5)); // the first refresh is now running
+    const second = Array.from({ length: 10 }, () => controller.refresh());
+    await Promise.all([...first, ...second]);
+    assert.equal(calls, 2);
+  });
+});
+
 describe('helpers', () => {
   it('formats minutes', () => {
     assert.equal(formatMinutes(5), '5 Minutes');

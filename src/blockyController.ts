@@ -53,6 +53,8 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
   private pollTimer?: NodeJS.Timeout;
   private autoEnableTimer?: NodeJS.Timeout;
   private queue: Promise<unknown> = Promise.resolve();
+  /** a refresh that is queued but hasn't started yet */
+  private pendingRefresh?: Promise<void>;
   private stopped = false;
 
   constructor(
@@ -89,15 +91,25 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
     clearTimeout(this.autoEnableTimer);
   }
 
-  /** Fetch the status from blocky. Errors are logged, not thrown. */
+  /**
+   * Fetch the status from blocky. Errors are logged, not thrown.
+   * Calls made while a refresh is still waiting in the queue share it, so a
+   * slow or unresponsive blocky can't build up a backlog of polls.
+   */
   refresh(): Promise<void> {
-    return this.enqueue(async () => {
+    if (this.pendingRefresh) {
+      return this.pendingRefresh;
+    }
+    const run = this.enqueue(async () => {
+      this.pendingRefresh = undefined;
       try {
         await this.fetchStatus();
       } catch (error) {
         this.markUnreachable(error);
       }
     });
+    this.pendingRefresh = run;
+    return run;
   }
 
   /** Main switch: true turns blocking on, false disables it with no time limit. */
