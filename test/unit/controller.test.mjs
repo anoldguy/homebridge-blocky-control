@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, it } from 'node:test';
+import { after, before, beforeEach, describe, it, mock } from 'node:test';
 
 import { BlockyClient } from '../../dist/blockyClient.js';
 import { BlockyController } from '../../dist/blockyController.js';
@@ -203,6 +203,25 @@ describe('polling', () => {
     const second = Array.from({ length: 10 }, () => controller.refresh());
     await Promise.all([...first, ...second]);
     assert.equal(calls, 2);
+  });
+});
+
+describe('countdown', () => {
+  it('counts down between status reads', async () => {
+    mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    try {
+      const client = { status: async () => ({ enabled: false, autoEnableInSec: 300 }) };
+      const controller = new BlockyController(client, quietLog, { pauseMinutes: [5], pollIntervalSeconds: 0 });
+      await controller.refresh();
+      controller.stop();
+      assert.equal(controller.snapshot.autoEnableInSec, 300);
+      mock.timers.tick(42_000);
+      assert.equal(controller.snapshot.autoEnableInSec, 258);
+      mock.timers.tick(1_000_000);
+      assert.equal(controller.snapshot.autoEnableInSec, 0);
+    } finally {
+      mock.timers.reset();
+    }
   });
 });
 

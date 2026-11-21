@@ -48,6 +48,8 @@ export interface BlockyControllerOptions {
  */
 export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }> {
   private status?: BlockingStatus;
+  /** when `status` was read (ms since epoch) */
+  private statusAt = 0;
   private reachable = false;
   private activePauseMinutes?: number;
   private lastEmitted = '';
@@ -74,8 +76,17 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
       reachable: this.reachable,
       blockingEnabled: enabled,
       activePauseMinutes: enabled ? undefined : this.activePauseMinutes,
-      autoEnableInSec: enabled ? 0 : (this.status?.autoEnableInSec ?? 0),
+      autoEnableInSec: enabled ? 0 : this.remainingSec(),
     };
+  }
+
+  /** blocky's countdown, less the time since it was read, so it keeps moving between polls */
+  private remainingSec(): number {
+    const atRead = this.status?.autoEnableInSec ?? 0;
+    if (atRead <= 0) {
+      return 0;
+    }
+    return Math.max(0, Math.round(atRead - (Date.now() - this.statusAt) / 1000));
   }
 
   start(): void {
@@ -224,6 +235,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
 
   private applyStatus(status: BlockingStatus): void {
     this.status = status;
+    this.statusAt = Date.now();
     this.reconcilePause(status);
     this.scheduleAutoEnableCheck(status);
     this.emitIfChanged();
