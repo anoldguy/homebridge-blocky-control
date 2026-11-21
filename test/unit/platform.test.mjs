@@ -63,4 +63,12 @@ describe('BlockyPlatform', () => {
     assert.deepEqual(calls.hapUnregistered, []);
     assert.deepEqual(calls.hapUpdated.map((x) => x.UUID), [legacyUuid]);
   });
+
+  it('keeps cached accessories when the URL is missing', async () => {
+    const { api } = makeApi();
+    const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));
+    const { calls } = await setUp({ url: '' }, { hap: true, matter: true }, { hap: [cached], matter: [{ UUID: 'm1', displayName: 'Blocky' }] });
+    assert.deepEqual(calls.hapUnregistered, []);
+    assert.deepEqual(calls.matterUnregistered, []);
+  });
 });

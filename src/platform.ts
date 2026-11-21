@@ -68,8 +68,8 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
   private async setup(): Promise<void> {
     const url = this.config.url?.trim();
     if (!url) {
+      // Leave cached accessories alone: removing them would delete the user's rooms and automations over a config typo.
       this.log.error('No blocky URL configured. Set "url" (e.g. http://192.168.1.2:4000) in the plugin settings.');
-      this.removeAllCached();
       return;
     }
 
@@ -164,10 +164,5 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
       this.log.info('Removing stale Matter accessories:', stale.map((a) => a.displayName).join(', '));
       await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, stale);
     }
-  }
-
-  private removeAllCached(): void {
-    this.removeCachedHap(new Set());
-    void this.removeCachedMatter(new Set()).catch(() => undefined);
   }
 }
