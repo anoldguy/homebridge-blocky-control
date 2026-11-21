@@ -189,6 +189,27 @@ describe('error handling', () => {
     }
   });
 
+  it('does not follow redirects or read oversized responses', async () => {
+    const { createServer } = await import('node:http');
+    const server = createServer((req, res) => {
+      if (req.url.startsWith('/api/blocking/enable')) {
+        res.writeHead(302, { Location: 'http://127.0.0.1:1/elsewhere' });
+        return res.end();
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ enabled: true, padding: 'x'.repeat(100_000) }));
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const client = new BlockyClient({ url: `http://127.0.0.1:${server.address().port}`, timeoutMs: 2000 });
+      await assert.rejects(client.enable(), /Could not reach blocky/);
+      await assert.rejects(client.status(), /unexpectedly large/);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((r) => server.close(r));
+    }
+  });
+
   it('reports HTTP errors from blocky', async () => {
     const fake = await startFakeBlocky({ port: 0 });
     try {

@@ -12,11 +12,36 @@ export interface BlockingStatus {
   autoEnableInSec?: number;
 }
 
+const MAX_RESPONSE_BYTES = 64 * 1024;
+
 export class BlockyApiError extends Error {
   constructor(message: string, public readonly status?: number) {
     super(message);
     this.name = 'BlockyApiError';
   }
+}
+
+/** Read the body as text, giving up once it passes MAX_RESPONSE_BYTES (blocky's responses are tiny). */
+async function readLimited(response: Response, path: string): Promise<string> {
+  const tooLarge = () => new BlockyApiError(`blocky's response to ${path} was unexpectedly large`, response.status);
+  if (Number(response.headers.get('content-length') ?? 0) > MAX_RESPONSE_BYTES) {
+    await response.body?.cancel();
+    throw tooLarge();
+  }
+  if (!response.body) {
+    return '';
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.byteLength;
+    if (size > MAX_RESPONSE_BYTES) {
+      await response.body.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export interface BlockyClientOptions {
@@ -77,13 +102,15 @@ export class BlockyClient {
       response = await fetch(url, {
         method: 'GET',
         headers: { Accept: 'application/json' },
+        // blocky never redirects; following one could send requests somewhere unexpected.
+        redirect: 'error',
         signal: AbortSignal.timeout(this.options.timeoutMs),
       });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new BlockyApiError(`Could not reach blocky at ${url}: ${reason}`);
     }
-    const body = await response.text();
+    const body = await readLimited(response, path);
     if (!response.ok) {
       throw new BlockyApiError(`blocky returned HTTP ${response.status} for ${path}: ${body.trim().slice(0, 200)}`, response.status);
     }
