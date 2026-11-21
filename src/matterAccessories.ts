@@ -26,6 +26,8 @@ export class BlockyMatterAccessories {
   private readonly uuids = new Map<string, string>();
   /** command currently being handled; pushes wait for it so they don't overlap with Homebridge's own state update */
   private inFlight: Promise<unknown> = Promise.resolve();
+  /** reachability last sent to Matter; Homebridge registers accessories as reachable */
+  private reachablePushed = true;
 
   constructor(
     private readonly api: API,
@@ -106,6 +108,8 @@ export class BlockyMatterAccessories {
 
     await matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessories);
     this.controller.on('change', (snap) => void this.push(snap));
+    // Homebridge publishes accessories as reachable; correct that now if blocky is down.
+    void this.push(snapshot);
     const valves = this.controls.filter((c) => isTimer(c, this.pauseStyle)).length;
     this.log.info(`Registered ${accessories.length - valves} Matter ${this.kind} and ${valves} valve accessories`);
   }
@@ -150,11 +154,15 @@ export class BlockyMatterAccessories {
 
   private async push(snapshot: BlockySnapshot): Promise<void> {
     const matter = this.api.matter;
-    if (!matter || !snapshot.known) {
+    if (!matter) {
       return;
     }
     // Let Homebridge finish its own state update for a command before sending ours.
     await this.inFlight;
+    await this.pushReachable(matter, snapshot.reachable);
+    if (!snapshot.known) {
+      return;
+    }
     for (const control of this.controls) {
       const uuid = this.uuids.get(control.id)!;
       const timer = isTimer(control, this.pauseStyle);
@@ -169,6 +177,21 @@ export class BlockyMatterAccessories {
       } catch (error) {
         this.lastPushed.delete(uuid);
         this.log.debug(`Failed to update Matter state for ${control.displayName}:`, error);
+      }
+    }
+  }
+
+  /** Mark every accessory reachable or not, so controllers show blocky being down (like "No Response" in HAP). */
+  private async pushReachable(matter: MatterApi, reachable: boolean): Promise<void> {
+    if (reachable === this.reachablePushed) {
+      return;
+    }
+    this.reachablePushed = reachable;
+    for (const uuid of this.uuids.values()) {
+      try {
+        await matter.updateAccessoryState(uuid, matter.clusterNames.BridgedDeviceBasicInformation, { reachable });
+      } catch (error) {
+        this.log.debug('Failed to update Matter reachability:', error);
       }
     }
   }

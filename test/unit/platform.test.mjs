@@ -70,6 +70,14 @@ describe('BlockyPlatform', () => {
     assert.ok(platform.controller.pollTimer, 'polling should be running');
   });
 
+  it('marks Matter accessories unreachable while blocky is down', async () => {
+    const { calls } = await setUp({ url: 'http://127.0.0.1:1', timeout: 1, pauseMinutes: [5] }, { hap: false, matter: true });
+    await new Promise((r) => setImmediate(r));
+    const reachability = calls.matterUpdates.filter((u) => u.cluster === 'bridgedDeviceBasicInformation');
+    assert.equal(reachability.length, 2);
+    assert.ok(reachability.every((u) => u.attributes.reachable === false));
+  });
+
   it('keeps cached accessories when the URL is missing', async () => {
     const { api } = makeApi();
     const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));
