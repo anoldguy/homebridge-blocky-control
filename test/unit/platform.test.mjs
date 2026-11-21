@@ -64,6 +64,12 @@ describe('BlockyPlatform', () => {
     assert.deepEqual(calls.hapUpdated.map((x) => x.UUID), [legacyUuid]);
   });
 
+  it('still publishes HAP and starts polling when Matter registration fails', async () => {
+    const { platform, calls } = await setUp({ url: fake.url, pollInterval: 60 }, { hap: true, matter: true, failMatterRegister: true });
+    assert.equal(calls.hapRegistered.length, 1);
+    assert.ok(platform.controller.pollTimer, 'polling should be running');
+  });
+
   it('keeps cached accessories when the URL is missing', async () => {
     const { api } = makeApi();
     const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));

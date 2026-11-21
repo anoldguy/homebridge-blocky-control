@@ -45,6 +45,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
   private readonly hapCache = new Map<string, PlatformAccessory>();
   private readonly matterCache = new Map<string, MatterAccessory>();
   private controller?: BlockyController;
+  private shuttingDown = false;
 
   constructor(
     public readonly log: Logging,
@@ -54,7 +55,10 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     this.api.on('didFinishLaunching', () => {
       this.setup().catch((error) => this.log.error('Failed to set up Blocky Control:', error));
     });
-    this.api.on('shutdown', () => this.controller?.stop());
+    this.api.on('shutdown', () => {
+      this.shuttingDown = true;
+      this.controller?.stop();
+    });
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -96,23 +100,33 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     // Get the real state before exposing anything, so switches don't start out wrong.
     await controller.refresh();
 
-    if (hapActive) {
-      this.setupHap(controller, controls, seed, pauseStyle);
-    } else {
-      this.removeCachedHap(new Set());
-    }
+    try {
+      if (hapActive) {
+        this.setupHap(controller, controls, seed, pauseStyle);
+      } else {
+        this.removeCachedHap(new Set());
+      }
 
-    if (matterActive) {
-      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, kind, pauseStyle);
-      await this.removeCachedMatter(matter.wantedUuids);
-      await matter.register();
-    }
+      if (matterActive) {
+        // A Matter failure shouldn't take HAP down with it.
+        try {
+          const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, kind, pauseStyle);
+          await this.removeCachedMatter(matter.wantedUuids);
+          await matter.register();
+        } catch (error) {
+          this.log.error('Failed to publish Matter accessories:', error);
+        }
+      }
 
-    if (!hapActive && !matterActive) {
-      this.log.warn('Neither HAP nor Matter is enabled for this bridge; no accessories were published.');
+      if (!hapActive && !matterActive) {
+        this.log.warn('Neither HAP nor Matter is enabled for this bridge; no accessories were published.');
+      }
+    } finally {
+      // Always start polling, so whatever did get published keeps up with blocky.
+      if (!this.shuttingDown) {
+        controller.start();
+      }
     }
-
-    controller.start();
   }
 
   /**
