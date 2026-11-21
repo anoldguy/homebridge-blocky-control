@@ -58,6 +58,25 @@ The plugin publishes over whichever transports the bridge has turned on.
 If you pair the same bridge to Apple Home over both HAP and Matter, every switch appears twice.
 Use a child bridge with only the transport you want.
 
+## Security
+
+**Anyone who can control your Home can turn DNS blocking off.** That includes every person you've
+added to the Home in Apple Home (or every user and admin on a Matter fabric), Siri, and automations.
+With a home hub it also works away from home. The main **Blocky** switch disables blocking with no
+time limit, so if you rely on blocky for content filtering (kids, guests), keep that in mind:
+
+- Apple Home can't limit control of a single accessory: everyone you share the Home with can operate it
+  ("Allow Editing" only covers changing the setup). Don't share the Home with people who shouldn't turn it off.
+- Use `pauseMinutes` and avoid the main switch in shared rooms, so blocking always comes back on by itself.
+- Run the plugin on its own child bridge, and pair that bridge only to the controllers that need it.
+
+blocky's API has no login, so anyone on your network who can reach `ports.http` could do the same
+thing with `curl`. This plugin widens that to everyone with access to your Home. Consider limiting
+blocky's HTTP port to the Homebridge host with a firewall rule.
+
+The plugin only talks to the configured blocky URL. It doesn't follow redirects, and it rejects
+URLs containing a user name or password.
+
 ## blocky API used
 
 - `GET /api/blocking/status`
