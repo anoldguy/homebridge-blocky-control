@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 
-import type { BlockingStatus, BlockyClient } from './blockyClient.js';
+import { BlockyApiError, type BlockingStatus, type BlockyClient } from './blockyClient.js';
 
 export interface ControllerLogger {
   debug(message: string, ...params: unknown[]): void;
@@ -102,11 +102,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
     }
     const run = this.enqueue(async () => {
       this.pendingRefresh = undefined;
-      try {
-        await this.fetchStatus();
-      } catch (error) {
-        this.markUnreachable(error);
-      }
+      await this.fetchStatusOrMarkUnreachable();
     });
     this.pendingRefresh = run;
     return run;
@@ -182,17 +178,28 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
       try {
         await plan.run();
       } catch (error) {
-        this.markUnreachable(error);
-        // Re-send the current state so the switch the user just flipped moves back.
+        if (error instanceof BlockyApiError && error.status !== undefined) {
+          // blocky answered but refused the request (e.g. an unknown group), so it's
+          // still reachable. Read its real state, so the switches show what it's doing.
+          this.log.error(error.message);
+          await this.fetchStatusOrMarkUnreachable();
+        } else {
+          this.markUnreachable(error);
+        }
+        // Re-send the state even if unchanged, so the switch the user just flipped moves back.
         this.emitIfChanged(true);
         throw error;
       }
-      try {
-        await this.fetchStatus();
-      } catch (error) {
-        this.markUnreachable(error);
-      }
+      await this.fetchStatusOrMarkUnreachable();
     });
+  }
+
+  private async fetchStatusOrMarkUnreachable(): Promise<void> {
+    try {
+      await this.fetchStatus();
+    } catch (error) {
+      this.markUnreachable(error);
+    }
   }
 
   private async fetchStatus(): Promise<void> {

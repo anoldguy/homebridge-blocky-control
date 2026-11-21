@@ -140,6 +140,22 @@ describe('error handling', () => {
     await assert.rejects(controller.pause(5), /Could not reach blocky/);
   });
 
+  it('keeps blocky reachable when it refuses a request with an HTTP error', async () => {
+    const fake = await startFakeBlocky({ port: 0 });
+    try {
+      const client = new BlockyClient({ url: fake.url, timeoutMs: 2000, groups: ['nope'] });
+      const controller = new BlockyController(client, quietLog, { pauseMinutes: [5], pollIntervalSeconds: 0 });
+      await controller.refresh();
+      fake.state.requests.length = 0;
+      await assert.rejects(controller.pause(5), /HTTP 400/);
+      assert.equal(controller.snapshot.reachable, true);
+      assert.equal(controller.snapshot.blockingEnabled, true);
+      assert.ok(fake.state.requests.includes('GET /api/blocking/status'), 're-reads the real state');
+    } finally {
+      await fake.close();
+    }
+  });
+
   it('reports HTTP errors from blocky', async () => {
     const fake = await startFakeBlocky({ port: 0 });
     try {
