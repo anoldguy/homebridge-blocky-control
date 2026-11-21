@@ -1,4 +1,4 @@
-import type { API } from 'homebridge';
+import type { API, MatterAccessory } from 'homebridge';
 
 export type MatterDeviceKind = 'switch' | 'outlet' | 'light';
 
@@ -12,7 +12,7 @@ type MatterApi = NonNullable<API['matter']>;
  * Homebridge plugins use the same type for virtual switches, e.g.
  * homebridge-dummy and homebridge-rainbird.
  */
-export function resolveMatterDeviceType(matter: MatterApi, kind: MatterDeviceKind) {
+export function resolveMatterDeviceType(matter: MatterApi, kind: MatterDeviceKind): MatterAccessory['deviceType'] {
   switch (kind) {
   case 'outlet':
     return matter.deviceTypes.OnOffOutlet;
