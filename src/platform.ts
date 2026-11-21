@@ -14,6 +14,8 @@ import {
   PLUGIN_NAME,
 } from './settings.js';
 
+const STABLE_UUID_SEED = `blocky:${PLATFORM_NAME}`;
+
 export interface BlockyPlatformConfig extends PlatformConfig {
   /** blocky HTTP base URL, e.g. http://192.168.1.2:4000 */
   url?: string;
@@ -85,12 +87,11 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     const controls = buildControls(controller, baseName, pauseMinutes);
     const pauseStyle = normalizePauseStyle(this.config.pauseStyle);
 
-    // UUIDs come from the URL, so pointing the plugin at a different blocky instance creates new accessories.
-    const seed = `blocky:${url}`;
-
     const api = this.api as TransportApi;
     const hapActive = api.isHapEnabled?.() !== false && !api.isHapExternalsOnly?.();
     const matterActive = Boolean(api.isMatterEnabled?.()) && !api.isMatterExternalsOnly?.() && Boolean(api.matter);
+    const kind = normalizeMatterDeviceKind(this.config.matterDeviceType);
+    const seed = this.chooseUuidSeed(url, (s) => new BlockyMatterAccessories(this.api, this.log, controller, controls, s, kind, pauseStyle));
 
     // Get the real state before exposing anything, so switches don't start out wrong.
     await controller.refresh();
@@ -102,7 +103,6 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     }
 
     if (matterActive) {
-      const kind = normalizeMatterDeviceKind(this.config.matterDeviceType);
       const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, kind, pauseStyle);
       await this.removeCachedMatter(matter.wantedUuids);
       await matter.register();
@@ -113,6 +113,23 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     }
 
     controller.start();
+  }
+
+  /**
+   * The seed every accessory UUID is built from. The platform is singular, so a
+   * constant works and editing the URL (trailing slash, new IP, hostname) keeps
+   * the same accessories, along with their rooms and automations.
+   *
+   * Versions up to 1.1.1 seeded from the raw URL. If the cache still has
+   * accessories from that seed, keep using it so existing setups don't lose
+   * their accessories. A later URL change moves them to the stable seed.
+   */
+  private chooseUuidSeed(url: string, matterFor: (seed: string) => BlockyMatterAccessories): string {
+    const legacy = `blocky:${url}`;
+    const hapHit = this.hapCache.has(this.api.hap.uuid.generate(`${legacy}:hap`));
+    const matterHit = this.api.matter !== undefined
+      && [...matterFor(legacy).wantedUuids].some((uuid) => this.matterCache.has(uuid));
+    return hapHit || matterHit ? legacy : STABLE_UUID_SEED;
   }
 
   private setupHap(controller: BlockyController, controls: ReturnType<typeof buildControls>, seed: string, pauseStyle: PauseStyle): void {

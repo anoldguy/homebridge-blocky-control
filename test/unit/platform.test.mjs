@@ -46,4 +46,21 @@ describe('BlockyPlatform', () => {
       assert.ok(!serial.includes('127.0.0.1'), serial);
     }
   });
+
+  it('keeps the same accessory UUIDs when the URL text changes', async () => {
+    const a = await setUp({ url: fake.url }, { hap: true, matter: true });
+    const b = await setUp({ url: `${fake.url}/` }, { hap: true, matter: true });
+    assert.equal(a.calls.hapRegistered[0].UUID, b.calls.hapRegistered[0].UUID);
+    assert.deepEqual(a.calls.matterRegistered.map((x) => x.UUID), b.calls.matterRegistered.map((x) => x.UUID));
+  });
+
+  it('keeps URL-seeded accessories from earlier versions instead of re-creating them', async () => {
+    const { api } = makeApi();
+    const legacyUuid = api.hap.uuid.generate(`blocky:${fake.url}:hap`);
+    const cached = new api.platformAccessory('Blocky', legacyUuid);
+    const { calls } = await setUp({ url: fake.url }, { hap: true }, { hap: [cached] });
+    assert.deepEqual(calls.hapRegistered, []);
+    assert.deepEqual(calls.hapUnregistered, []);
+    assert.deepEqual(calls.hapUpdated.map((x) => x.UUID), [legacyUuid]);
+  });
 });
