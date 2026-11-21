@@ -60,7 +60,8 @@ export class BlockyMatterAccessories {
       const base = {
         UUID: uuid,
         displayName: control.displayName,
-        serialNumber: `${this.uuidSeed}-${control.id}`.slice(0, 32),
+        // Derived from the UUID: unique per accessory, at most 32 characters, and doesn't reveal the blocky URL.
+        serialNumber: uuid.replace(/-/g, ''),
         manufacturer: MANUFACTURER,
         model: MODEL,
         context: { controlId: control.id },
