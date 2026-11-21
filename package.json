@@ -34,7 +34,8 @@
     "prepublishOnly": "npm run lint && npm run build",
     "watch": "npm run build && npm link && nodemon",
     "test": "npm run build && node --test test/unit/",
-    "fake-blocky": "node test/fake-blocky.mjs"
+    "fake-blocky": "node test/fake-blocky.mjs",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
