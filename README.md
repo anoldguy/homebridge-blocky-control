@@ -14,6 +14,10 @@ It adds these controls:
 HomeKit and Matter have no "timer" accessory. The closest is a valve, which carries a duration and shows a remaining-time countdown in the Home app.
 So by default each pause is a generic Valve (HAP) or Water Valve (Matter) with a fixed duration. Set `pauseStyle` to `switch` to use plain switches instead.
 
+> **Matter controllers:** controllers differ in how they handle the Water Valve type. Some may show it
+> as a water valve (Alexa, for example, may ask for confirmation or a PIN to open one) or not
+> support it at all. If pauses look wrong or don't appear, set `pauseStyle` to `switch`.
+
 - You choose the pause durations (`pauseMinutes`). Use an empty list to get only the main switch.
 - Only one pause can run at a time. Turning on another pause switch restarts the timer with its duration.
 - When blocky's timer ends, the pause turns off and **Blocky** turns back on.
@@ -43,13 +47,13 @@ So by default each pause is a generic Valve (HAP) or Water Valve (Matter) with a
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `url` | *(required)* | Base URL of blocky's HTTP listener. Leave off `/api`. |
+| `url` | *(required)* | Base URL of blocky's HTTP listener (`http://` or `https://`). Leave off `/api`. |
 | `name` | `Blocky` | Name of the main switch. Pause switches are named `Pause <name> …`. |
-| `pauseMinutes` | `[5, 10, 60]` | One pause control is created for each entry. |
+| `pauseMinutes` | `[5, 10, 60]` | One pause control is created for each entry (1 to 1440). |
 | `pauseStyle` | `valve` | `valve` (timer with countdown) or `switch`. |
 | `groups` | all | Only disable these blocky groups (passed to blocky as `groups=`). |
-| `pollInterval` | `15` | Seconds between status checks. `0` turns polling off. |
-| `timeout` | `5` | HTTP request timeout, in seconds. |
+| `pollInterval` | `15` | Seconds between status checks (5 to 3600). `0` turns polling off. |
+| `timeout` | `5` | HTTP request timeout, in seconds (1 to 10). |
 | `matterDeviceType` | `switch` | Matter only: `switch`, `outlet`, or `light`. Changing it re-creates the Matter accessories. |
 
 ### HAP vs Matter
@@ -96,6 +100,7 @@ Code layout:
 
 - `src/blockyClient.ts`: HTTP client for blocky's REST API
 - `src/blockyController.ts`: state, polling, actions, and the "change" event. Shared by both transports.
+- `src/config.ts`: startup checks for the URL and numeric settings
 - `src/controls.ts`: definitions of the main switch and the pause switches
 - `src/hapAccessory.ts`: HAP accessory with one `Switch` service per control
 - `src/matterAccessories.ts`: one Matter on/off accessory per control
