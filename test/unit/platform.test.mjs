@@ -78,6 +78,49 @@ describe('BlockyPlatform', () => {
     assert.ok(reachability.every((u) => u.attributes.reachable === false));
   });
 
+  describe('HAP accessory', () => {
+    const service = (accessory, type, subtype) => accessory.getServiceById(type, subtype);
+
+    it('has a Switch for the main control and a Valve per pause', async () => {
+      const { api, calls } = await setUp({ url: fake.url, pauseMinutes: [5, 60] }, { hap: true });
+      const accessory = calls.hapRegistered[0];
+      const { Service, Characteristic } = api.hap;
+      assert.ok(service(accessory, Service.Switch, 'blocking'));
+      const valve = service(accessory, Service.Valve, 'pause-60');
+      assert.ok(valve);
+      assert.equal(valve.getCharacteristic(Characteristic.SetDuration).value, 3600);
+      assert.ok(!valve.getCharacteristic(Characteristic.SetDuration).props.perms.includes(api.hap.Perms.PAIRED_WRITE));
+    });
+
+    it('switches to plain Switch services with pauseStyle switch, removing the old valves', async () => {
+      const first = await setUp({ url: fake.url, pauseMinutes: [5] }, { hap: true });
+      const accessory = first.calls.hapRegistered[0];
+      first.api.emit('shutdown');
+      const { api } = await setUp({ url: fake.url, pauseMinutes: [5], pauseStyle: 'switch' }, { hap: true }, { hap: [accessory] });
+      assert.ok(service(accessory, api.hap.Service.Switch, 'pause-5'));
+      assert.equal(service(accessory, api.hap.Service.Valve, 'pause-5'), undefined);
+    });
+
+    it('turns blocky off and on from the characteristics', async () => {
+      const { api, calls } = await setUp({ url: fake.url, pauseMinutes: [5] }, { hap: true });
+      const accessory = calls.hapRegistered[0];
+      const { Service, Characteristic } = api.hap;
+      const active = service(accessory, Service.Valve, 'pause-5').getCharacteristic(Characteristic.Active);
+      await active.handleSetRequest(Characteristic.Active.ACTIVE);
+      assert.equal(fake.state.enabled, false);
+      assert.ok(fake.state.until > Date.now() + 290_000);
+      await active.handleSetRequest(Characteristic.Active.INACTIVE);
+      assert.equal(fake.state.enabled, true);
+    });
+
+    it('reports No Response while blocky is unreachable', async () => {
+      const { api, calls } = await setUp({ url: 'http://127.0.0.1:1', timeout: 1, pauseMinutes: [] }, { hap: true });
+      const on = service(calls.hapRegistered[0], api.hap.Service.Switch, 'blocking').getCharacteristic(api.hap.Characteristic.On);
+      const noResponse = api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE;
+      await assert.rejects(on.handleGetRequest(), (e) => e === noResponse || e.hapStatus === noResponse);
+    });
+  });
+
   it('keeps cached accessories and publishes nothing when the URL is invalid', async () => {
     const { api } = makeApi();
     const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));
