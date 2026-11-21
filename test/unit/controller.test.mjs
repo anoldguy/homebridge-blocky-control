@@ -3,7 +3,8 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 
 import { BlockyClient } from '../../dist/blockyClient.js';
 import { BlockyController } from '../../dist/blockyController.js';
-import { buildControls, formatMinutes, normalizePauseMinutes } from '../../dist/controls.js';
+import { buildControls, formatMinutes, isTimer, normalizePauseMinutes, normalizePauseStyle } from '../../dist/controls.js';
+import { normalizeMatterDeviceKind } from '../../dist/matterDeviceTypes.js';
 import { startFakeBlocky } from '../fake-blocky.mjs';
 
 const quietLog = { debug() {}, info() {}, warn() {}, error() {} };
@@ -148,5 +149,21 @@ describe('helpers', () => {
     assert.deepEqual(normalizePauseMinutes(undefined, [5, 10]), [5, 10]);
     assert.deepEqual(normalizePauseMinutes([60, '5', 5, -1, 2.5, 'x'], []), [5, 60]);
     assert.deepEqual(normalizePauseMinutes([], [5]), []);
+  });
+
+  it('picks which controls are timers', () => {
+    const controls = buildControls({}, 'Blocky', [5]);
+    assert.deepEqual(controls.map((c) => isTimer(c, 'valve')), [false, true]);
+    assert.deepEqual(controls.map((c) => isTimer(c, 'switch')), [false, false]);
+    assert.equal(controls[1].minutes, 5);
+  });
+
+  it('normalizes pause style and Matter device kind', () => {
+    assert.equal(normalizePauseStyle(undefined), 'valve');
+    assert.equal(normalizePauseStyle('switch'), 'switch');
+    assert.equal(normalizePauseStyle('bogus'), 'valve');
+    assert.equal(normalizeMatterDeviceKind(undefined), 'switch');
+    assert.equal(normalizeMatterDeviceKind('outlet'), 'outlet');
+    assert.equal(normalizeMatterDeviceKind('nope'), 'switch');
   });
 });

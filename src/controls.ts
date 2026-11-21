@@ -8,10 +8,23 @@ export interface BlockyControl {
   /** stable id, used for HAP subtypes and Matter UUID seeds */
   id: string;
   displayName: string;
+  /** pause length in minutes; undefined for the main blocking switch */
+  minutes?: number;
   /** what the switch should show for a given snapshot */
   isOn(snapshot: BlockySnapshot): boolean;
   /** run when the user flips the switch */
   set(on: boolean): Promise<void>;
+}
+
+export type PauseStyle = 'valve' | 'switch';
+
+export function normalizePauseStyle(value: unknown): PauseStyle {
+  return value === 'switch' ? 'switch' : 'valve';
+}
+
+/** true when this control should be a valve (timer) rather than a switch */
+export function isTimer(control: BlockyControl, style: PauseStyle): control is BlockyControl & { minutes: number } {
+  return style === 'valve' && control.minutes !== undefined;
 }
 
 export function formatMinutes(minutes: number): string {
@@ -35,6 +48,7 @@ export function buildControls(controller: BlockyController, baseName: string, pa
     controls.push({
       id: `pause-${minutes}`,
       displayName: `Pause ${baseName} ${formatMinutes(minutes)}`,
+      minutes,
       isOn: (s) => !s.blockingEnabled && s.activePauseMinutes === minutes,
       set: (on) => (on ? controller.pause(minutes) : controller.cancelPause(minutes)),
     });

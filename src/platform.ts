@@ -2,7 +2,7 @@ import type { API, DynamicPlatformPlugin, Logging, MatterAccessory, PlatformAcce
 
 import { BlockyClient } from './blockyClient.js';
 import { BlockyController } from './blockyController.js';
-import { buildControls, normalizePauseMinutes } from './controls.js';
+import { buildControls, normalizePauseMinutes, normalizePauseStyle, type PauseStyle } from './controls.js';
 import { BlockyHapAccessory } from './hapAccessory.js';
 import { BlockyMatterAccessories } from './matterAccessories.js';
 import { type MatterDeviceKind, normalizeMatterDeviceKind } from './matterDeviceTypes.js';
@@ -25,6 +25,8 @@ export interface BlockyPlatformConfig extends PlatformConfig {
   timeout?: number;
   /** Matter device type for each control */
   matterDeviceType?: MatterDeviceKind;
+  /** 'valve' (timer with countdown, default) or 'switch' */
+  pauseStyle?: PauseStyle;
 }
 
 /**
@@ -81,6 +83,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     const controller = new BlockyController(client, this.log, { pauseMinutes, pollIntervalSeconds });
     this.controller = controller;
     const controls = buildControls(controller, baseName, pauseMinutes);
+    const pauseStyle = normalizePauseStyle(this.config.pauseStyle);
 
     // UUIDs come from the URL, so pointing the plugin at a different blocky instance creates new accessories.
     const seed = `blocky:${url}`;
@@ -93,13 +96,14 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     await controller.refresh();
 
     if (hapActive) {
-      this.setupHap(controller, controls, seed);
+      this.setupHap(controller, controls, seed, pauseStyle);
     } else {
       this.removeCachedHap(new Set());
     }
 
     if (matterActive) {
-      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, normalizeMatterDeviceKind(this.config.matterDeviceType));
+      const kind = normalizeMatterDeviceKind(this.config.matterDeviceType);
+      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, kind, pauseStyle);
       await this.removeCachedMatter(matter.wantedUuids);
       await matter.register();
     }
@@ -111,7 +115,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     controller.start();
   }
 
-  private setupHap(controller: BlockyController, controls: ReturnType<typeof buildControls>, seed: string): void {
+  private setupHap(controller: BlockyController, controls: ReturnType<typeof buildControls>, seed: string, pauseStyle: PauseStyle): void {
     const uuid = this.api.hap.uuid.generate(`${seed}:hap`);
     const displayName = controls[0].displayName;
     let accessory = this.hapCache.get(uuid);
@@ -119,7 +123,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     if (!accessory) {
       accessory = new this.api.platformAccessory(displayName, uuid);
     }
-    new BlockyHapAccessory(this.api, accessory, controller, controls, uuid.slice(0, 8));
+    new BlockyHapAccessory(this.api, accessory, controller, controls, pauseStyle, uuid.slice(0, 8));
     if (isNew) {
       this.log.info('Adding HAP accessory:', displayName);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

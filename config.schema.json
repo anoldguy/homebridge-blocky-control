@@ -39,6 +39,26 @@
           "maximum": 1440
         }
       },
+      "pauseStyle": {
+        "title": "Pause control style",
+        "type": "string",
+        "default": "valve",
+        "oneOf": [
+          {
+            "title": "Timer (valve with countdown)",
+            "enum": [
+              "valve"
+            ]
+          },
+          {
+            "title": "Switch",
+            "enum": [
+              "switch"
+            ]
+          }
+        ],
+        "description": "Timer shows each pause as a valve with its duration and a live countdown in the Home app. Switch shows a plain on/off switch."
+      },
       "groups": {
         "title": "Blocking groups",
         "type": "array",
@@ -66,7 +86,7 @@
         "default": "switch",
         "oneOf": [
           {
-            "title": "Switch (Matter 1.4 Mounted On/Off Control)",
+            "title": "Switch (On/Off Switch)",
             "enum": [
               "switch"
             ]
@@ -99,6 +119,7 @@
         "pauseMinutes[]"
       ]
     },
+    "pauseStyle",
     {
       "type": "fieldset",
       "title": "Advanced",
