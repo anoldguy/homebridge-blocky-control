@@ -1,0 +1,83 @@
+{
+  "pluginAlias": "BlockyControl",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Control [blocky](https://0xerr0r.github.io/blocky/) DNS blocking from HomeKit or Matter. You get a switch that turns blocking on and off, plus one \"pause\" switch for each duration listed below.",
+  "schema": {
+    "type": "object",
+    "required": ["name", "url"],
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Blocky",
+        "description": "Name of the main switch. Pause switches are named \"Pause <Name> 5 Minutes\" and so on."
+      },
+      "url": {
+        "title": "Blocky URL",
+        "type": "string",
+        "format": "uri",
+        "placeholder": "http://192.168.1.2:4000",
+        "description": "Base URL of blocky's HTTP listener (ports.http in blocky's config). Leave off the /api path."
+      },
+      "pauseMinutes": {
+        "title": "Pause durations (minutes)",
+        "type": "array",
+        "default": [5, 10, 60],
+        "description": "Each entry adds a switch that pauses blocking for that many minutes. Leave empty to show only the on/off switch.",
+        "items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        }
+      },
+      "groups": {
+        "title": "Blocking groups",
+        "type": "array",
+        "description": "Only disable these blocky groups (as named under blocking.denylists in blocky's config). Leave empty to disable all groups.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "pollInterval": {
+        "title": "Poll interval (seconds)",
+        "type": "integer",
+        "default": 15,
+        "minimum": 0,
+        "description": "How often to check blocky's status, so changes made elsewhere show up. Set to 0 to turn polling off."
+      },
+      "timeout": {
+        "title": "Request timeout (seconds)",
+        "type": "number",
+        "default": 5,
+        "minimum": 1
+      }
+    }
+  },
+  "layout": [
+    "name",
+    "url",
+    {
+      "key": "pauseMinutes",
+      "type": "array",
+      "buttonText": "Add duration",
+      "items": ["pauseMinutes[]"]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced",
+      "expandable": true,
+      "items": [
+        {
+          "key": "groups",
+          "type": "array",
+          "buttonText": "Add group",
+          "items": ["groups[]"]
+        },
+        "pollInterval",
+        "timeout"
+      ]
+    }
+  ]
+}

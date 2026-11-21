@@ -1,0 +1,149 @@
+import type { API, DynamicPlatformPlugin, Logging, MatterAccessory, PlatformAccessory, PlatformConfig } from 'homebridge';
+
+import { BlockyClient } from './blockyClient.js';
+import { BlockyController } from './blockyController.js';
+import { buildControls, normalizePauseMinutes } from './controls.js';
+import { BlockyHapAccessory } from './hapAccessory.js';
+import { BlockyMatterAccessories } from './matterAccessories.js';
+import {
+  DEFAULT_PAUSE_MINUTES,
+  DEFAULT_POLL_INTERVAL_SECONDS,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  PLATFORM_NAME,
+  PLUGIN_NAME,
+} from './settings.js';
+
+export interface BlockyPlatformConfig extends PlatformConfig {
+  /** blocky HTTP base URL, e.g. http://192.168.1.2:4000 */
+  url?: string;
+  /** pause durations in minutes (one switch per entry) */
+  pauseMinutes?: number[];
+  /** only disable these blocking groups (default: all) */
+  groups?: string[];
+  pollInterval?: number;
+  timeout?: number;
+}
+
+/**
+ * Optional calls keep this working on Homebridge 1.x, which has none of these methods.
+ * isHapEnabled and isHapExternalsOnly were added in Homebridge 2.5.
+ */
+type TransportApi = API & {
+  isHapEnabled?: () => boolean;
+  isHapExternalsOnly?: () => boolean;
+  isMatterExternalsOnly?: () => boolean;
+};
+
+export class BlockyPlatform implements DynamicPlatformPlugin {
+  private readonly hapCache = new Map<string, PlatformAccessory>();
+  private readonly matterCache = new Map<string, MatterAccessory>();
+  private controller?: BlockyController;
+
+  constructor(
+    public readonly log: Logging,
+    public readonly config: BlockyPlatformConfig,
+    public readonly api: API,
+  ) {
+    this.api.on('didFinishLaunching', () => {
+      this.setup().catch((error) => this.log.error('Failed to set up Blocky Control:', error));
+    });
+    this.api.on('shutdown', () => this.controller?.stop());
+  }
+
+  configureAccessory(accessory: PlatformAccessory): void {
+    this.hapCache.set(accessory.UUID, accessory);
+  }
+
+  configureMatterAccessory(accessory: MatterAccessory): void {
+    this.matterCache.set(accessory.UUID, accessory);
+  }
+
+  private async setup(): Promise<void> {
+    const url = this.config.url?.trim();
+    if (!url) {
+      this.log.error('No blocky URL configured. Set "url" (e.g. http://192.168.1.2:4000) in the plugin settings.');
+      this.removeAllCached();
+      return;
+    }
+
+    const baseName = this.config.name?.trim() || 'Blocky';
+    const pauseMinutes = normalizePauseMinutes(this.config.pauseMinutes, DEFAULT_PAUSE_MINUTES);
+    const pollIntervalSeconds = Math.max(0, Number(this.config.pollInterval ?? DEFAULT_POLL_INTERVAL_SECONDS));
+    const timeoutMs = Math.max(500, Number(this.config.timeout ?? DEFAULT_REQUEST_TIMEOUT_MS / 1000) * 1000);
+    const groups = Array.isArray(this.config.groups)
+      ? this.config.groups.map((g) => String(g).trim()).filter(Boolean)
+      : undefined;
+
+    const client = new BlockyClient({ url, groups, timeoutMs });
+    const controller = new BlockyController(client, this.log, { pauseMinutes, pollIntervalSeconds });
+    this.controller = controller;
+    const controls = buildControls(controller, baseName, pauseMinutes);
+
+    // UUIDs come from the URL, so pointing the plugin at a different blocky instance creates new accessories.
+    const seed = `blocky:${url}`;
+
+    const api = this.api as TransportApi;
+    const hapActive = api.isHapEnabled?.() !== false && !api.isHapExternalsOnly?.();
+    const matterActive = Boolean(api.isMatterEnabled?.()) && !api.isMatterExternalsOnly?.() && Boolean(api.matter);
+
+    // Get the real state before exposing anything, so switches don't start out wrong.
+    await controller.refresh();
+
+    if (hapActive) {
+      this.setupHap(controller, controls, seed);
+    } else {
+      this.removeCachedHap(new Set());
+    }
+
+    if (matterActive) {
+      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed);
+      await this.removeCachedMatter(matter.wantedUuids);
+      await matter.register();
+    }
+
+    if (!hapActive && !matterActive) {
+      this.log.warn('Neither HAP nor Matter is enabled for this bridge; no accessories were published.');
+    }
+
+    controller.start();
+  }
+
+  private setupHap(controller: BlockyController, controls: ReturnType<typeof buildControls>, seed: string): void {
+    const uuid = this.api.hap.uuid.generate(`${seed}:hap`);
+    const displayName = controls[0].displayName;
+    let accessory = this.hapCache.get(uuid);
+    const isNew = !accessory;
+    if (!accessory) {
+      accessory = new this.api.platformAccessory(displayName, uuid);
+    }
+    new BlockyHapAccessory(this.api, accessory, controller, controls, uuid.slice(0, 8));
+    if (isNew) {
+      this.log.info('Adding HAP accessory:', displayName);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } else {
+      this.api.updatePlatformAccessories([accessory]);
+    }
+    this.removeCachedHap(new Set([uuid]));
+  }
+
+  private removeCachedHap(keep: Set<string>): void {
+    const stale = [...this.hapCache.values()].filter((a) => !keep.has(a.UUID));
+    if (stale.length > 0) {
+      this.log.info('Removing stale HAP accessories:', stale.map((a) => a.displayName).join(', '));
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, stale);
+    }
+  }
+
+  private async removeCachedMatter(keep: Set<string>): Promise<void> {
+    const stale = [...this.matterCache.values()].filter((a) => !keep.has(a.UUID));
+    if (stale.length > 0 && this.api.matter) {
+      this.log.info('Removing stale Matter accessories:', stale.map((a) => a.displayName).join(', '));
+      await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, stale);
+    }
+  }
+
+  private removeAllCached(): void {
+    this.removeCachedHap(new Set());
+    void this.removeCachedMatter(new Set()).catch(() => undefined);
+  }
+}

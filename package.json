@@ -1,0 +1,51 @@
+{
+  "name": "homebridge-blocky-control",
+  "displayName": "Blocky Control",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turn blocky DNS ad-blocking on and off, or pause it for a few minutes, from HomeKit (HAP) or Matter.",
+  "author": "anoldguy",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/anoldguy/homebridge-blocky-control#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anoldguy/homebridge-blocky-control.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anoldguy/homebridge-blocky-control/issues"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "supports-hap",
+    "supports-matter",
+    "blocky",
+    "dns",
+    "adblock"
+  ],
+  "main": "dist/index.js",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || ^26.0.0",
+    "homebridge": "^1.8.0 || ^2.0.0"
+  },
+  "scripts": {
+    "build": "rimraf ./dist && tsc",
+    "lint": "eslint . --max-warnings=0",
+    "prepublishOnly": "npm run lint && npm run build",
+    "watch": "npm run build && npm link && nodemon",
+    "test": "npm run build && node --test test/unit/",
+    "fake-blocky": "node test/fake-blocky.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.0",
+    "globals": "^17.14.0",
+    "homebridge": "^2.4.0",
+    "nodemon": "^3.1.14",
+    "rimraf": "^6.1.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}
