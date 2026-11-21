@@ -22,7 +22,8 @@
         "type": "string",
         "format": "uri",
         "placeholder": "http://192.168.1.2:4000",
-        "description": "Base URL of blocky's HTTP listener (ports.http in blocky's config). Leave off the /api path."
+        "description": "Base URL of blocky's HTTP listener (ports.http in blocky's config). Leave off the /api path.",
+        "pattern": "^https?://"
       },
       "pauseMinutes": {
         "title": "Pause durations (minutes)",
@@ -72,13 +73,16 @@
         "type": "integer",
         "default": 15,
         "minimum": 0,
-        "description": "How often to check blocky's status, so changes made elsewhere show up. Set to 0 to turn polling off."
+        "description": "How often to check blocky's status, so changes made elsewhere show up. Set to 0 to turn polling off; otherwise at least 5.",
+        "maximum": 3600
       },
       "timeout": {
         "title": "Request timeout (seconds)",
         "type": "number",
         "default": 5,
-        "minimum": 1
+        "minimum": 1,
+        "maximum": 10,
+        "description": "How long to wait for blocky to answer (1 to 10 seconds). HomeKit gives up on a switch after about 10 seconds."
       },
       "matterDeviceType": {
         "title": "Matter device type",

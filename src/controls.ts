@@ -1,4 +1,5 @@
 import { type BlockyController, type BlockySnapshot, isPauseOn } from './blockyController.js';
+import { MAX_PAUSE_MINUTES } from './settings.js';
 
 /**
  * One switch exposed to HomeKit or Matter. The HAP and Matter code both use
@@ -60,13 +61,13 @@ export function buildControls(controller: BlockyController, baseName: string, pa
   return controls;
 }
 
-/** Remove duplicates, drop values that aren't positive whole numbers, and sort. */
+/** Remove duplicates, drop values that aren't whole numbers from 1 to MAX_PAUSE_MINUTES, and sort. */
 export function normalizePauseMinutes(input: unknown, fallback: number[]): number[] {
   if (!Array.isArray(input)) {
     return [...fallback];
   }
   const values = input
     .map((v) => Number(v))
-    .filter((v) => Number.isInteger(v) && v > 0);
+    .filter((v) => Number.isInteger(v) && v > 0 && v <= MAX_PAUSE_MINUTES);
   return [...new Set(values)].sort((a, b) => a - b);
 }

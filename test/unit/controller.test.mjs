@@ -4,6 +4,7 @@ import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { BlockyClient } from '../../dist/blockyClient.js';
 import { BlockyController } from '../../dist/blockyController.js';
 import { buildControls, formatMinutes, isTimer, normalizePauseMinutes, normalizePauseStyle } from '../../dist/controls.js';
+import { parseBlockyUrl, readNumber } from '../../dist/config.js';
 import { normalizeMatterDeviceKind } from '../../dist/matterDeviceTypes.js';
 import { startFakeBlocky } from '../fake-blocky.mjs';
 
@@ -254,5 +255,37 @@ describe('helpers', () => {
     assert.equal(normalizeMatterDeviceKind(undefined), 'switch');
     assert.equal(normalizeMatterDeviceKind('outlet'), 'outlet');
     assert.equal(normalizeMatterDeviceKind('nope'), 'switch');
+  });
+});
+
+describe('config checks', () => {
+  it('accepts http(s) base URLs and normalizes them', () => {
+    assert.deepEqual(parseBlockyUrl('http://192.168.1.2:4000/'), { ok: true, url: 'http://192.168.1.2:4000' });
+    assert.deepEqual(parseBlockyUrl('https://dns.lan/api'), { ok: true, url: 'https://dns.lan' });
+    assert.deepEqual(parseBlockyUrl('http://dns.lan/blocky/api/'), { ok: true, url: 'http://dns.lan/blocky' });
+  });
+
+  it('rejects URLs that would fail on every request', () => {
+    assert.equal(parseBlockyUrl('192.168.1.2:4000').ok, false);
+    assert.equal(parseBlockyUrl('ftp://dns.lan').ok, false);
+    assert.equal(parseBlockyUrl('http://dns.lan:4000?x=1').ok, false);
+    assert.equal(parseBlockyUrl('not a url').ok, false);
+  });
+
+  it('reads numbers with fallbacks and limits', () => {
+    const warnings = [];
+    const warn = (m) => warnings.push(m);
+    const poll = { name: 'pollInterval', fallback: 15, min: 5, max: 3600, allowZero: true };
+    assert.equal(readNumber(undefined, poll, warn), 15);
+    assert.equal(readNumber(0, poll, warn), 0);
+    assert.equal(readNumber(1, poll, warn), 5);
+    assert.equal(readNumber('abc', poll, warn), 15);
+    assert.equal(readNumber(-3, poll, warn), 5);
+    assert.equal(readNumber(30, poll, warn), 30);
+    assert.equal(warnings.length, 3);
+  });
+
+  it('drops pause durations over the limit', () => {
+    assert.deepEqual(normalizePauseMinutes([5, 1440, 1441, 100000], []), [5, 1440]);
   });
 });

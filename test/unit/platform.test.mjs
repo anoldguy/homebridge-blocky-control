@@ -78,6 +78,14 @@ describe('BlockyPlatform', () => {
     assert.ok(reachability.every((u) => u.attributes.reachable === false));
   });
 
+  it('keeps cached accessories and publishes nothing when the URL is invalid', async () => {
+    const { api } = makeApi();
+    const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));
+    const { calls } = await setUp({ url: '192.168.1.2:4000' }, { hap: true }, { hap: [cached] });
+    assert.deepEqual(calls.hapRegistered, []);
+    assert.deepEqual(calls.hapUnregistered, []);
+  });
+
   it('keeps cached accessories when the URL is missing', async () => {
     const { api } = makeApi();
     const cached = new api.platformAccessory('Blocky', api.hap.uuid.generate('anything'));

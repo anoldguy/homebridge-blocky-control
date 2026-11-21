@@ -2,6 +2,7 @@ import type { API, DynamicPlatformPlugin, Logging, MatterAccessory, PlatformAcce
 
 import { BlockyClient } from './blockyClient.js';
 import { BlockyController } from './blockyController.js';
+import { parseBlockyUrl, readNumber } from './config.js';
 import { buildControls, normalizePauseMinutes, normalizePauseStyle, type PauseStyle } from './controls.js';
 import { BlockyHapAccessory } from './hapAccessory.js';
 import { BlockyMatterAccessories } from './matterAccessories.js';
@@ -10,6 +11,9 @@ import {
   DEFAULT_PAUSE_MINUTES,
   DEFAULT_POLL_INTERVAL_SECONDS,
   DEFAULT_REQUEST_TIMEOUT_MS,
+  MAX_POLL_INTERVAL_SECONDS,
+  MAX_REQUEST_TIMEOUT_SECONDS,
+  MIN_POLL_INTERVAL_SECONDS,
   PLATFORM_NAME,
   PLUGIN_NAME,
 } from './settings.js';
@@ -70,17 +74,28 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
   }
 
   private async setup(): Promise<void> {
-    const url = this.config.url?.trim();
-    if (!url) {
+    const rawUrl = this.config.url?.trim();
+    if (!rawUrl) {
       // Leave cached accessories alone: removing them would delete the user's rooms and automations over a config typo.
       this.log.error('No blocky URL configured. Set "url" (e.g. http://192.168.1.2:4000) in the plugin settings.');
       return;
     }
+    const parsedUrl = parseBlockyUrl(rawUrl);
+    if (!parsedUrl.ok) {
+      this.log.error(`Invalid blocky URL: ${parsedUrl.error}`);
+      return;
+    }
+    const url = parsedUrl.url;
+    const warn = (message: string) => this.log.warn(message);
 
     const baseName = this.config.name?.trim() || 'Blocky';
     const pauseMinutes = normalizePauseMinutes(this.config.pauseMinutes, DEFAULT_PAUSE_MINUTES);
-    const pollIntervalSeconds = Math.max(0, Number(this.config.pollInterval ?? DEFAULT_POLL_INTERVAL_SECONDS));
-    const timeoutMs = Math.max(500, Number(this.config.timeout ?? DEFAULT_REQUEST_TIMEOUT_MS / 1000) * 1000);
+    const pollIntervalSeconds = readNumber(this.config.pollInterval, {
+      name: 'pollInterval', fallback: DEFAULT_POLL_INTERVAL_SECONDS, min: MIN_POLL_INTERVAL_SECONDS, max: MAX_POLL_INTERVAL_SECONDS, allowZero: true,
+    }, warn);
+    const timeoutMs = 1000 * readNumber(this.config.timeout, {
+      name: 'timeout', fallback: DEFAULT_REQUEST_TIMEOUT_MS / 1000, min: 1, max: MAX_REQUEST_TIMEOUT_SECONDS,
+    }, warn);
     const groups = Array.isArray(this.config.groups)
       ? this.config.groups.map((g) => String(g).trim()).filter(Boolean)
       : undefined;
@@ -95,7 +110,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     const hapActive = api.isHapEnabled?.() !== false && !api.isHapExternalsOnly?.();
     const matterActive = Boolean(api.isMatterEnabled?.()) && !api.isMatterExternalsOnly?.() && Boolean(api.matter);
     const kind = normalizeMatterDeviceKind(this.config.matterDeviceType);
-    const seed = this.chooseUuidSeed(url, (s) => new BlockyMatterAccessories(this.api, this.log, controller, controls, s, kind, pauseStyle));
+    const seed = this.chooseUuidSeed(rawUrl, (s) => new BlockyMatterAccessories(this.api, this.log, controller, controls, s, kind, pauseStyle));
 
     // Get the real state before exposing anything, so switches don't start out wrong.
     await controller.refresh();
