@@ -16,7 +16,7 @@ It adds these switches:
 - When blocky's timer ends, the pause switch turns off and **Blocky** turns back on.
 - The plugin polls blocky's status, so changes made elsewhere also show up: blocky's CLI or API, other clients, or a restart.
   If something else started a timed disable, the plugin turns on the shortest pause switch that covers the time left.
-- In HomeKit, all switches belong to one accessory. In Matter, each switch is a separate **On/Off Plug-in Unit**, so it shows up as an outlet. You can change the icon in the Home app.
+- In HomeKit, all switches belong to one accessory. In Matter, each switch is a separate accessory. By default it uses the Matter 1.4 **Mounted On/Off Control** (switch) type. Set `matterDeviceType` to `outlet` or `light` if your Matter controller doesn't support switches.
 
 ## Requirements
 
@@ -45,6 +45,7 @@ It adds these switches:
 | `groups` | all | Only disable these blocky groups (passed to blocky as `groups=`). |
 | `pollInterval` | `15` | Seconds between status checks. `0` turns polling off. |
 | `timeout` | `5` | HTTP request timeout, in seconds. |
+| `matterDeviceType` | `switch` | Matter only: `switch` (Mounted On/Off Control), `outlet`, or `light`. Changing it re-creates the Matter accessories. |
 
 ### HAP vs Matter
 
@@ -73,5 +74,6 @@ Code layout:
 - `src/blockyController.ts`: state, polling, actions, and the "change" event. Shared by both transports.
 - `src/controls.ts`: definitions of the main switch and the pause switches
 - `src/hapAccessory.ts`: HAP accessory with one `Switch` service per control
-- `src/matterAccessories.ts`: one Matter `OnOffOutlet` per control
+- `src/matterAccessories.ts`: one Matter on/off accessory per control
+- `src/matterDeviceTypes.ts`: builds the Mounted On/Off Control type, which Homebridge doesn't expose
 - `src/platform.ts`: picks the transports, restores the cache, removes stale accessories

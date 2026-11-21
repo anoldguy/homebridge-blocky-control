@@ -6,7 +6,10 @@
   "headerDisplay": "Control [blocky](https://0xerr0r.github.io/blocky/) DNS blocking from HomeKit or Matter. You get a switch that turns blocking on and off, plus one \"pause\" switch for each duration listed below.",
   "schema": {
     "type": "object",
-    "required": ["name", "url"],
+    "required": [
+      "name",
+      "url"
+    ],
     "properties": {
       "name": {
         "title": "Name",
@@ -24,7 +27,11 @@
       "pauseMinutes": {
         "title": "Pause durations (minutes)",
         "type": "array",
-        "default": [5, 10, 60],
+        "default": [
+          5,
+          10,
+          60
+        ],
         "description": "Each entry adds a switch that pauses blocking for that many minutes. Leave empty to show only the on/off switch.",
         "items": {
           "type": "integer",
@@ -52,6 +59,32 @@
         "type": "number",
         "default": 5,
         "minimum": 1
+      },
+      "matterDeviceType": {
+        "title": "Matter device type",
+        "type": "string",
+        "default": "switch",
+        "oneOf": [
+          {
+            "title": "Switch (Matter 1.4 Mounted On/Off Control)",
+            "enum": [
+              "switch"
+            ]
+          },
+          {
+            "title": "Outlet (On/Off Plug-in Unit)",
+            "enum": [
+              "outlet"
+            ]
+          },
+          {
+            "title": "Light (On/Off Light)",
+            "enum": [
+              "light"
+            ]
+          }
+        ],
+        "description": "How the switches look to Matter controllers. Only applies when Matter is on for this bridge. If your controller doesn't support Switch, use Outlet. Changing this re-creates the Matter accessories."
       }
     }
   },
@@ -62,18 +95,23 @@
       "key": "pauseMinutes",
       "type": "array",
       "buttonText": "Add duration",
-      "items": ["pauseMinutes[]"]
+      "items": [
+        "pauseMinutes[]"
+      ]
     },
     {
       "type": "fieldset",
       "title": "Advanced",
       "expandable": true,
       "items": [
+        "matterDeviceType",
         {
           "key": "groups",
           "type": "array",
           "buttonText": "Add group",
-          "items": ["groups[]"]
+          "items": [
+            "groups[]"
+          ]
         },
         "pollInterval",
         "timeout"

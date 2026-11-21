@@ -2,14 +2,12 @@ import type { API, Logging, MatterAccessory } from 'homebridge';
 
 import type { BlockyController, BlockySnapshot } from './blockyController.js';
 import type { BlockyControl } from './controls.js';
+import { type MatterDeviceKind, resolveMatterDeviceType } from './matterDeviceTypes.js';
 import { MANUFACTURER, MODEL, PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 /**
- * Publishes each control as its own Matter On/Off Plug-in Unit (outlet).
- *
- * Matter's "OnOffSwitch" device type is a controller that drives other
- * devices, so Apple Home and other ecosystems don't show it as a toggle.
- * The outlet type is the usual choice for a virtual switch.
+ * Publishes each control as its own Matter on/off endpoint. By default that's
+ * a Mounted On/Off Control (switch); see matterDeviceTypes.ts.
  */
 export class BlockyMatterAccessories {
   /** last OnOff value sent to Matter for each UUID, so unchanged values aren't sent again */
@@ -22,9 +20,14 @@ export class BlockyMatterAccessories {
     private readonly controller: BlockyController,
     private readonly controls: BlockyControl[],
     private readonly uuidSeed: string,
+    private readonly kind: MatterDeviceKind,
   ) {
+    // The device type is part of the UUID (except 'outlet', which keeps the original UUIDs). Changing the
+    // type creates new accessories instead of changing existing ones in place, which controllers like Apple
+    // Home often don't pick up.
+    const typeSeed = kind === 'outlet' ? '' : `:${kind}`;
     for (const control of controls) {
-      this.uuids.set(control.id, api.hap.uuid.generate(`${uuidSeed}:matter:${control.id}`));
+      this.uuids.set(control.id, api.hap.uuid.generate(`${uuidSeed}:matter${typeSeed}:${control.id}`));
     }
   }
 
@@ -42,6 +45,7 @@ export class BlockyMatterAccessories {
       return;
     }
     const snapshot = this.controller.snapshot;
+    const deviceType = resolveMatterDeviceType(matter, this.kind);
     const accessories: MatterAccessory[] = this.controls.map((control) => {
       const uuid = this.uuids.get(control.id)!;
       const on = control.isOn(snapshot);
@@ -49,7 +53,7 @@ export class BlockyMatterAccessories {
       return {
         UUID: uuid,
         displayName: control.displayName,
-        deviceType: matter.deviceTypes.OnOffOutlet,
+        deviceType,
         serialNumber: `${this.uuidSeed}-${control.id}`.slice(0, 32),
         manufacturer: MANUFACTURER,
         model: MODEL,
@@ -69,7 +73,7 @@ export class BlockyMatterAccessories {
 
     await matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessories);
     this.controller.on('change', (snap) => void this.push(snap));
-    this.log.info(`Registered ${accessories.length} Matter accessor${accessories.length === 1 ? 'y' : 'ies'}`);
+    this.log.info(`Registered ${accessories.length} Matter ${this.kind} accessor${accessories.length === 1 ? 'y' : 'ies'}`);
   }
 
   private async handle(control: BlockyControl, uuid: string, on: boolean): Promise<void> {

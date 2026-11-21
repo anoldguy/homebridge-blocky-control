@@ -5,6 +5,7 @@ import { BlockyController } from './blockyController.js';
 import { buildControls, normalizePauseMinutes } from './controls.js';
 import { BlockyHapAccessory } from './hapAccessory.js';
 import { BlockyMatterAccessories } from './matterAccessories.js';
+import { type MatterDeviceKind, normalizeMatterDeviceKind } from './matterDeviceTypes.js';
 import {
   DEFAULT_PAUSE_MINUTES,
   DEFAULT_POLL_INTERVAL_SECONDS,
@@ -22,6 +23,8 @@ export interface BlockyPlatformConfig extends PlatformConfig {
   groups?: string[];
   pollInterval?: number;
   timeout?: number;
+  /** Matter device type for each control */
+  matterDeviceType?: MatterDeviceKind;
 }
 
 /**
@@ -96,7 +99,7 @@ export class BlockyPlatform implements DynamicPlatformPlugin {
     }
 
     if (matterActive) {
-      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed);
+      const matter = new BlockyMatterAccessories(this.api, this.log, controller, controls, seed, normalizeMatterDeviceKind(this.config.matterDeviceType));
       await this.removeCachedMatter(matter.wantedUuids);
       await matter.register();
     }
