@@ -51,6 +51,8 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
   /** when `status` was read (ms since epoch) */
   private statusAt = 0;
   private reachable = false;
+  /** an error has been logged since the last successful request */
+  private outageLogged = false;
   private activePauseMinutes?: number;
   private lastEmitted = '';
 
@@ -211,6 +213,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
         this.log.info('Connected to blocky');
       }
       this.reachable = true;
+      this.outageLogged = false;
       this.applyStatus(plan.expected);
       void this.refresh();
     });
@@ -230,6 +233,7 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
       this.log.info(`Connected to blocky (blocking ${status.enabled ? 'enabled' : 'disabled'})`);
     }
     this.reachable = true;
+    this.outageLogged = false;
     this.applyStatus(status);
   }
 
@@ -271,8 +275,10 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
 
   private markUnreachable(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
-    if (this.reachable || this.status === undefined) {
+    // Log the first failure of an outage as an error, and the rest at debug level.
+    if (!this.outageLogged) {
       this.log.error(message);
+      this.outageLogged = true;
     } else {
       this.log.debug(message);
     }

@@ -162,6 +162,17 @@ describe('error handling', () => {
     await assert.rejects(controller.pause(5), /Could not reach blocky/);
   });
 
+  it('logs one error per outage, even if blocky was never reached', async () => {
+    const errors = [];
+    const log = { ...quietLog, error: (m) => errors.push(m) };
+    const client = new BlockyClient({ url: 'http://127.0.0.1:1', timeoutMs: 500 });
+    const controller = new BlockyController(client, log, { pauseMinutes: [5], pollIntervalSeconds: 0 });
+    await controller.refresh();
+    await controller.refresh();
+    await controller.refresh();
+    assert.equal(errors.length, 1);
+  });
+
   it('keeps blocky reachable when it refuses a request with an HTTP error', async () => {
     const fake = await startFakeBlocky({ port: 0 });
     try {
