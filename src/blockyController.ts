@@ -25,6 +25,16 @@ export interface BlockySnapshot {
   autoEnableInSec: number;
 }
 
+/** true when the pause switch for `minutes` should show as on */
+export function isPauseOn(snapshot: BlockySnapshot, minutes: number): boolean {
+  return !snapshot.blockingEnabled && snapshot.activePauseMinutes === minutes;
+}
+
+interface ActionPlan {
+  label: string;
+  run: () => Promise<void>;
+}
+
 export interface BlockyControllerOptions {
   pauseMinutes: number[];
   pollIntervalSeconds: number;
@@ -92,45 +102,76 @@ export class BlockyController extends EventEmitter<{ change: [BlockySnapshot] }>
 
   /** Main switch: true turns blocking on, false disables it with no time limit. */
   setBlocking(enabled: boolean): Promise<void> {
-    return this.runAction(enabled ? 'enable blocking' : 'disable blocking', async () => {
-      if (enabled) {
-        await this.client.enable();
-      } else {
-        await this.client.disable();
-      }
-      this.activePauseMinutes = undefined;
-    });
+    return this.runPlanned(() => this.blockingPlan(enabled));
   }
 
   /** Pause switch: disable blocking for `minutes`. */
   pause(minutes: number): Promise<void> {
-    return this.runAction(`pause blocking for ${minutes} minutes`, async () => {
-      await this.client.disable(minutes);
-      this.activePauseMinutes = minutes;
-    });
+    return this.runPlanned(() => this.pausePlan(minutes));
   }
 
   /**
    * Turning a pause switch off turns blocking back on, but only if that pause
    * is the active one. Otherwise there is nothing to do.
    */
-  async cancelPause(minutes: number): Promise<void> {
-    const current = this.snapshot;
-    if (current.blockingEnabled || current.activePauseMinutes !== minutes) {
-      this.emitIfChanged(true);
-      return;
-    }
-    await this.setBlocking(true);
+  cancelPause(minutes: number): Promise<void> {
+    return this.runPlanned(() => (isPauseOn(this.snapshot, minutes) ? this.blockingPlan(true) : undefined));
   }
 
-  private runAction(label: string, action: () => Promise<void>): Promise<void> {
+  /** Flip the main switch (no `minutes`) or a pause switch, based on the state when the request runs. */
+  toggle(minutes?: number): Promise<void> {
+    return this.runPlanned(() => {
+      const current = this.snapshot;
+      if (minutes === undefined) {
+        return this.blockingPlan(!current.blockingEnabled);
+      }
+      return isPauseOn(current, minutes) ? this.blockingPlan(true) : this.pausePlan(minutes);
+    });
+  }
+
+  private blockingPlan(enabled: boolean): ActionPlan {
+    return {
+      label: enabled ? 'enable blocking' : 'disable blocking',
+      run: async () => {
+        if (enabled) {
+          await this.client.enable();
+        } else {
+          await this.client.disable();
+        }
+        this.activePauseMinutes = undefined;
+      },
+    };
+  }
+
+  private pausePlan(minutes: number): ActionPlan {
+    return {
+      label: `pause blocking for ${minutes} minutes`,
+      run: async () => {
+        await this.client.disable(minutes);
+        this.activePauseMinutes = minutes;
+      },
+    };
+  }
+
+  /**
+   * Queue an action. `decide` runs when the action's turn comes, so it sees the
+   * state left by any earlier actions (a quick on-then-off is handled in order).
+   * When it returns undefined there is nothing to do, and the switches are
+   * re-sent so the one the user flipped moves back.
+   */
+  private runPlanned(decide: () => ActionPlan | undefined): Promise<void> {
     return this.enqueue(async () => {
-      this.log.info(`Blocky: ${label}`);
+      const plan = decide();
+      if (!plan) {
+        this.emitIfChanged(true);
+        return;
+      }
+      this.log.info(`Blocky: ${plan.label}`);
       try {
-        await action();
+        await plan.run();
       } catch (error) {
         this.markUnreachable(error);
-        // Read the real state again so the switch the user just flipped moves back.
+        // Re-send the current state so the switch the user just flipped moves back.
         this.emitIfChanged(true);
         throw error;
       }

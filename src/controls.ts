@@ -1,4 +1,4 @@
-import type { BlockyController, BlockySnapshot } from './blockyController.js';
+import { type BlockyController, type BlockySnapshot, isPauseOn } from './blockyController.js';
 
 /**
  * One switch exposed to HomeKit or Matter. The HAP and Matter code both use
@@ -14,6 +14,8 @@ export interface BlockyControl {
   isOn(snapshot: BlockySnapshot): boolean;
   /** run when the user flips the switch */
   set(on: boolean): Promise<void>;
+  /** flip the switch, deciding the direction when the request runs (not when it's queued) */
+  toggle(): Promise<void>;
 }
 
 export type PauseStyle = 'valve' | 'switch';
@@ -42,6 +44,7 @@ export function buildControls(controller: BlockyController, baseName: string, pa
       displayName: baseName,
       isOn: (s) => s.blockingEnabled,
       set: (on) => controller.setBlocking(on),
+      toggle: () => controller.toggle(),
     },
   ];
   for (const minutes of pauseMinutes) {
@@ -49,8 +52,9 @@ export function buildControls(controller: BlockyController, baseName: string, pa
       id: `pause-${minutes}`,
       displayName: `Pause ${baseName} ${formatMinutes(minutes)}`,
       minutes,
-      isOn: (s) => !s.blockingEnabled && s.activePauseMinutes === minutes,
+      isOn: (s) => isPauseOn(s, minutes),
       set: (on) => (on ? controller.pause(minutes) : controller.cancelPause(minutes)),
+      toggle: () => controller.toggle(minutes),
     });
   }
   return controls;

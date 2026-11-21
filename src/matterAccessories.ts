@@ -82,8 +82,8 @@ export class BlockyMatterAccessories {
           handlers: {
             valveConfigurationAndControl: {
               // The requested openDuration is ignored, because each valve has a fixed pause length.
-              open: () => this.handle(control, true),
-              close: () => this.handle(control, false),
+              open: () => this.handle(() => control.set(true)),
+              close: () => this.handle(() => control.set(false)),
             },
           },
         };
@@ -96,9 +96,9 @@ export class BlockyMatterAccessories {
         clusters: { onOff: { onOff: on } },
         handlers: {
           onOff: {
-            on: () => this.handle(control, true),
-            off: () => this.handle(control, false),
-            toggle: () => this.handle(control, !control.isOn(this.controller.snapshot)),
+            on: () => this.handle(() => control.set(true)),
+            off: () => this.handle(() => control.set(false)),
+            toggle: () => this.handle(() => control.toggle()),
           },
         },
       };
@@ -135,10 +135,10 @@ export class BlockyMatterAccessories {
     };
   }
 
-  private handle(control: BlockyControl, on: boolean): Promise<void> {
+  private handle(action: () => Promise<void>): Promise<void> {
     const run = (async () => {
       try {
-        await control.set(on);
+        await action();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new this.api.matter!.status.Failure(`Blocky request failed: ${message}`);

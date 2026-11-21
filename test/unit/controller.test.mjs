@@ -71,6 +71,21 @@ describe('BlockyController against fake blocky', () => {
     assert.equal(fake.state.requests.length, 0);
   });
 
+  it('a quick on-then-off of a pause switch ends with blocking on', async () => {
+    // Don't wait for the pause to finish before cancelling it.
+    await Promise.all([byId('pause-60').set(true), byId('pause-60').set(false)]);
+    assert.equal(fake.state.enabled, true);
+    assert.deepEqual(states(), { 'blocking': true, 'pause-5': false, 'pause-10': false, 'pause-60': false });
+  });
+
+  it('toggles based on the state when the request runs', async () => {
+    await Promise.all([byId('blocking').toggle(), byId('blocking').toggle()]);
+    assert.equal(fake.state.enabled, true);
+    await Promise.all([byId('pause-5').toggle(), byId('pause-5').toggle(), byId('pause-5').toggle()]);
+    assert.equal(fake.state.enabled, false);
+    assert.deepEqual(states(), { 'blocking': false, 'pause-5': true, 'pause-10': false, 'pause-60': false });
+  });
+
   it('turning on the main switch ends a pause', async () => {
     await byId('pause-60').set(true);
     await byId('blocking').set(true);
